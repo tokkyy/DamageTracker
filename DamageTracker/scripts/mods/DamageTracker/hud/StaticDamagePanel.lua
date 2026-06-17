@@ -8,64 +8,29 @@ local sizeAnim = { 400, 100 }
 
 local scenegraph_definition = {
 	screen = UIWorkspaceSettings.screen,
-	topContainer = {
-		parent = "screen",
-		vertical_alignment = "center",
-		horizontal_alignment = "center",
-		size = sizeAnim,
-		position = { 0, 0, 10 }
-	},
-	bottomContainer = {
-		parent = "screen",
-		vertical_alignment = "center",
-		horizontal_alignment = "center",
-		size = sizeAnim,
-		position = { 0, 0, 10 }
-	},
+	topContainer = { parent = "screen", vertical_alignment = "center", horizontal_alignment = "center",
+		size = sizeAnim, position = { 0, 0, 10 } },
+	bottomContainer = { parent = "screen", vertical_alignment = "center", horizontal_alignment = "center",
+		size = sizeAnim, position = { 0, 0, 10 } },
 }
 
 local base_style = {
-	line_spacing = 1.2,
-	drop_shadow = true,
-	font_type = "machine_medium",
-	size = sizeAnim,
-	text_horizontal_alignment = "center",
-	text_vertical_alignment = "center",
-	offset = { 0, 0, 10 },
+	line_spacing = 1.2, drop_shadow = true, font_type = "machine_medium", size = sizeAnim,
+	text_horizontal_alignment = "center", text_vertical_alignment = "center", offset = { 0, 0, 10 },
 }
 
 local widget_definitions = {
 	topDamageText = UIWidget.create_definition({
 		{ value = "", value_id = "text", style_id = "text", pass_type = "text", style = table.clone(base_style) },
-		{
-			value = "",
-			value_id = "icon",
-			style_id = "icon",
-			pass_type = "texture",
-			style = {
-				vertical_alignment = "center",
-				horizontal_alignment = "center",
-				color = { 0, 255, 255, 255 },
-				size = { 40, 40 },
-				offset = { 0, 0, 10 }
-			}
-		},
+		{ value = "", value_id = "icon", style_id = "icon", pass_type = "texture",
+			style = { vertical_alignment = "center", horizontal_alignment = "center",
+				color = { 0, 255, 255, 255 }, size = { 40, 40 }, offset = { 0, 0, 10 } } },
 	}, "topContainer"),
 	bottomDamageText = UIWidget.create_definition({
 		{ value = "", value_id = "text", style_id = "text", pass_type = "text", style = table.clone(base_style) },
-		{
-			value = "",
-			value_id = "icon",
-			style_id = "icon",
-			pass_type = "texture",
-			style = {
-				vertical_alignment = "center",
-				horizontal_alignment = "center",
-				color = { 0, 255, 255, 255 },
-				size = { 40, 40 },
-				offset = { 0, 0, 10 }
-			}
-		},
+		{ value = "", value_id = "icon", style_id = "icon", pass_type = "texture",
+			style = { vertical_alignment = "center", horizontal_alignment = "center",
+				color = { 0, 255, 255, 255 }, size = { 40, 40 }, offset = { 0, 0, 10 } } },
 	}, "bottomContainer"),
 }
 
@@ -80,28 +45,10 @@ StaticDamagePanel.init = function(self, parent, draw_layer, start_scale)
 	self.display_duration = 2.0
 
 	self.lines = {
-		top = {
-			active = false,
-			timer = 0,
-			total = 0,
-			last = 0,
-			last_time = 0,
-			widget_name = "topDamageText",
-			style_type = "combined",
-			dirty = false,
-			text_width = 0
-		},
-		bottom = {
-			active = false,
-			timer = 0,
-			total = 0,
-			last = 0,
-			last_time = 0,
-			widget_name = "bottomDamageText",
-			style_type = "dot",
-			dirty = false,
-			text_width = 0
-		},
+		top = { active = false, timer = 0, total = 0, last = 0, last_time = 0, widget_name = "topDamageText",
+			style_type = "combined", dirty = false, text_width = 0 },
+		bottom = { active = false, timer = 0, total = 0, last = 0, last_time = 0, widget_name = "bottomDamageText",
+			style_type = "dot", dirty = false, text_width = 0 },
 	}
 
 	Managers.event:register(self, "damage_tracker_on_damage", "_on_static_damage")
@@ -181,13 +128,9 @@ StaticDamagePanel.update = function(self, dt, t, ui_renderer, render_settings, i
 
 	local function format_text(total, single, mode)
 		local tot, sin = mod.format_damage_number(total), mod.format_damage_number(single)
-		if mode == "total_only" then
-			return tot
-		elseif mode == "single_only" then
-			return sin
-		else
-			return string.format("%s[+%s]", tot, sin)
-		end
+		if mode == "total_only" then return tot
+		elseif mode == "single_only" then return sin
+		else return string.format("%s[+%s]", tot, sin) end
 	end
 
 	for idx, line in pairs({ top = self.lines.top, bottom = self.lines.bottom }) do

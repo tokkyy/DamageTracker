@@ -41,6 +41,14 @@ local localization = {
 	fct_enemy_filters = { en = "Enemy Type Filter", ["zh-cn"] = "敌人类型筛选" },
 
 	fct_general = { en = "General", ["zh-cn"] = "常规设置" },
+	fct_hit_types = { en = "Hit Type Filter", ["zh-cn"] = "伤害类型筛选" },
+	fct_show_normal = { en = "Normal Hits", ["zh-cn"] = "普通伤害" },
+	fct_show_pure_weakspot = { en = "Weakspot Hits", ["zh-cn"] = "弱点伤害 (非暴击)" },
+	fct_show_pure_crit = { en = "Crit Hits", ["zh-cn"] = "暴击伤害 (非弱点)" },
+	fct_show_weakspot_crit = { en = "Weakspot + Crit", ["zh-cn"] = "弱点暴击" },
+	fct_show_dot = { en = "DoT Ticks", ["zh-cn"] = "持续伤害 (DoT)" },
+	fct_show_explosion = { en = "Explosion Hits", ["zh-cn"] = "爆炸伤害" },
+	fct_damage_threshold = { en = "Damage Threshold (0=off)", ["zh-cn"] = "伤害过滤阈值 (0=关闭)" },
 	fct_fixed_mode = { en = "Fixed Style", ["zh-cn"] = "固定风格" },
 	fct_compact_mode = { en = "Compact Style", ["zh-cn"] = "简洁风格" },
 
@@ -68,10 +76,6 @@ local localization = {
 	font_arial = { en = "Arial", ["zh-cn"] = "Arial" },
 	fct_font_type = { en = "Font Type", ["zh-cn"] = "字体样式" },
 	main_font_type = { en = "Font Type", ["zh-cn"] = "字体样式" },
-
-	fct_mode_finesse = { en = "Crit/Weakspot Only", ["zh-cn"] = "仅限技巧伤害 (弱点/暴击)" },
-	fct_mode_all_direct = { en = "All Direct (No DoT)", ["zh-cn"] = "所有直接伤害 (无DoT)" },
-	fct_mode_all = { en = "All Damage", ["zh-cn"] = "全局伤害" },
 
 	weapon_filter_both = { en = "Both Melee & Ranged", ["zh-cn"] = "默认 (近战与远程)" },
 	weapon_filter_melee = { en = "Melee Only", ["zh-cn"] = "仅限近战" },

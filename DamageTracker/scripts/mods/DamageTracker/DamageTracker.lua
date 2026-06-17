@@ -1,20 +1,37 @@
 local mod = get_mod("DamageTracker")
 local Breed = mod:original_require("scripts/utilities/breed")
 
+mod._health_cache = {}
+setmetatable(mod._health_cache, { __mode = "k" })
+
 
 mod.cached_settings = {
+	enable_overkill = false,
 	use_k_format = true,
 	tracking_mode = "separated",
-	floating_mode = "all_direct",
+	fct_show_normal = true,
+	fct_show_pure_weakspot = true,
+	fct_show_pure_crit = true,
+	fct_show_weakspot_crit = true,
+	fct_show_dot = true,
+	fct_show_explosion = true,
+	fct_damage_threshold = 0,
 	floating_weapon_filter = "both",
 	floating_style = "compact",
 	fct_los_check = false,
 }
 
 local function update_cached_settings()
+	mod.cached_settings.enable_overkill = mod:get("enable_overkill_damage")
 	mod.cached_settings.use_k_format = mod:get("use_k_format")
 	mod.cached_settings.tracking_mode = mod:get("tracking_mode") or "separated"
-	mod.cached_settings.floating_mode = mod:get("floating_mode") or "all_direct"
+	mod.cached_settings.fct_show_normal = mod:get("fct_show_normal")
+	mod.cached_settings.fct_show_pure_weakspot = mod:get("fct_show_pure_weakspot")
+	mod.cached_settings.fct_show_pure_crit = mod:get("fct_show_pure_crit")
+	mod.cached_settings.fct_show_weakspot_crit = mod:get("fct_show_weakspot_crit")
+	mod.cached_settings.fct_show_dot = mod:get("fct_show_dot")
+	mod.cached_settings.fct_show_explosion = mod:get("fct_show_explosion")
+	mod.cached_settings.fct_damage_threshold = mod:get("fct_damage_threshold") or 0
 	mod.cached_settings.floating_weapon_filter = mod:get("floating_weapon_filter") or "both"
 	mod.cached_settings.floating_style = mod:get("floating_style") or "compact"
 	mod.cached_settings.fct_los_check = mod:get("fct_los_check")
@@ -89,152 +106,15 @@ local function classify_breed_category(breed_or_nil)
 	return "other"
 end
 
-local function is_fct_eligible(hit_type, floating_mode)
-	if floating_mode == "disabled" then return false end
-	if floating_mode == "finesse_only" then
-		return hit_type == "pure_weakspot" or hit_type == "pure_crit" or hit_type == "weakspot_crit"
+local function is_fct_eligible(hit_type, s)
+	if hit_type == "normal" then return s.fct_show_normal
+	elseif hit_type == "pure_weakspot" then return s.fct_show_pure_weakspot
+	elseif hit_type == "pure_crit" then return s.fct_show_pure_crit
+	elseif hit_type == "weakspot_crit" then return s.fct_show_weakspot_crit
+	elseif hit_type == "dot" then return s.fct_show_dot
+	elseif hit_type == "explosion" then return s.fct_show_explosion
 	end
-	if floating_mode == "all_direct" then return hit_type ~= "dot" end
 	return true
-end
-
-local _tracked_units = {}
-local QUEUE_MAX_AGE = 0.5
-
-mod._classify_hit_type = function(attack_type, hit_weakspot, is_critical_strike)
-	if attack_type == "buff" or attack_type == "damage_over_time" then
-		return "dot"
-	elseif attack_type == "explosion" then
-		return "explosion"
-	elseif hit_weakspot and is_critical_strike then
-		return "weakspot_crit"
-	elseif hit_weakspot then
-		return "pure_weakspot"
-	elseif is_critical_strike then
-		return "pure_crit"
-	else
-		return "normal"
-	end
-end
-
-mod._purge_stale_entries = function(state, current_time)
-	local queue = state.metadata_queue
-	local write_idx = 1
-	for i = 1, #queue do
-		local entry = queue[i]
-		if current_time - entry.timestamp <= QUEUE_MAX_AGE then
-			queue[write_idx] = entry
-			write_idx = write_idx + 1
-		end
-	end
-	for i = write_idx, #queue do
-		queue[i] = nil
-	end
-end
-
-mod._fire_fct_events = function(unit, breed_or_nil, entries, category_delta, total_reported, s)
-	local n = #entries
-	if n == 0 or category_delta <= 0 then return end
-
-	local wf = s.floating_weapon_filter
-	local breed_category = classify_breed_category(breed_or_nil)
-	local attributed_sum = 0
-
-	for i = 1, n do
-		local entry = entries[i]
-
-		local pass_weapon = (wf == "both") or
-			(wf == "melee_only" and entry.attack_type == "melee") or
-			(wf == "ranged_only" and entry.attack_type == "ranged")
-		if not pass_weapon then goto continue_fct_entry end
-
-		local attributed
-		if i == n then
-			attributed = category_delta - attributed_sum
-			if attributed <= 0 then break end
-		else
-			if total_reported > 0 then
-				attributed = math.max(1, math.floor(category_delta * entry.reported_damage / total_reported + 0.5))
-			else
-				attributed = math.max(1, math.floor(category_delta / n))
-			end
-			attributed_sum = attributed_sum + attributed
-		end
-
-		local hit_type = mod._classify_hit_type(entry.attack_type, entry.hit_weakspot, entry.is_critical_strike)
-		if not is_fct_eligible(hit_type, s.floating_mode) then
-			goto continue_fct_entry
-		end
-
-		local fct_world_pos = entry.hit_world_position
-
-		if entry.attack_type == "explosion" then
-			if unit and Unit.has_node(unit, "j_spine") then
-				fct_world_pos = Vector3Box(Unit.world_position(unit, Unit.node(unit, "j_spine")))
-			elseif unit then
-				local pos = POSITION_LOOKUP[unit]
-				fct_world_pos = pos and Vector3Box(pos) or Vector3Box(Unit.world_position(unit, 1))
-			end
-		elseif not fct_world_pos then
-			if unit and Unit.has_node(unit, "j_spine") then
-				fct_world_pos = Vector3Box(Unit.world_position(unit, Unit.node(unit, "j_spine")))
-			elseif unit then
-				local pos = POSITION_LOOKUP[unit]
-				fct_world_pos = pos and Vector3Box(pos) or Vector3Box(Unit.world_position(unit, 1))
-			end
-		end
-
-		if fct_world_pos then
-			Managers.event:trigger("damage_tracker_on_floating_damage",
-				attributed, hit_type, fct_world_pos, unit, breed_category)
-		end
-
-		::continue_fct_entry::
-	end
-end
-
-mod._process_drained_queue = function(unit, breed_or_nil, queue, delta, tracking_needed, s)
-	local dot_entries = {}
-	local direct_entries = {}
-	local dot_total_reported = 0
-	local direct_total_reported = 0
-
-	for i = 1, #queue do
-		local entry = queue[i]
-		local is_dot = (entry.attack_type == "buff" or entry.attack_type == "damage_over_time")
-		if is_dot then
-			dot_entries[#dot_entries + 1] = entry
-			dot_total_reported = dot_total_reported + entry.reported_damage
-		else
-			direct_entries[#direct_entries + 1] = entry
-			direct_total_reported = direct_total_reported + entry.reported_damage
-		end
-	end
-
-	local total_reported = dot_total_reported + direct_total_reported
-	if total_reported <= 0 then return end
-
-	local dot_delta = math.floor(delta * dot_total_reported / total_reported + 0.5)
-	local direct_delta = delta - dot_delta
-	if dot_delta < 0 then dot_delta = 0 end
-	if direct_delta < 0 then direct_delta = 0 end
-
-	if tracking_needed then
-		local mode = s.tracking_mode
-		if dot_delta > 0 and #dot_entries > 0 then
-			if mode == "combined" or mode == "separated" or mode == "dot_only" then
-				Managers.event:trigger("damage_tracker_on_damage", dot_delta, "main_dot", dot_delta)
-			end
-		end
-		if direct_delta > 0 and #direct_entries > 0 then
-			if mode == "combined" or mode == "separated" or mode == "direct_only" then
-				Managers.event:trigger("damage_tracker_on_damage", direct_delta, "main_direct", direct_delta)
-			end
-		end
-	end
-
-	mod._fire_fct_events(unit, breed_or_nil, dot_entries, dot_delta, dot_total_reported, s)
-	mod._fire_fct_events(unit, breed_or_nil, direct_entries, direct_delta, direct_total_reported, s)
 end
 
 mod:register_hud_element({
@@ -274,121 +154,117 @@ mod:hook_safe(CLASS.AttackReportManager, "add_attack_result",
 			 hit_weakspot, damage, attack_result, attack_type, damage_efficiency, is_critical_strike, ...)
 		if not damage or damage <= 0 then return end
 
+		local unit_data_extension = ScriptUnit.has_extension(attacked_unit, "unit_data_system")
+		local breed_or_nil = unit_data_extension and unit_data_extension:breed()
+		local is_minion = breed_or_nil and Breed.is_minion(breed_or_nil)
+
+		if is_minion and attack_result ~= "died" then
+			local health_ext = ScriptUnit.has_extension(attacked_unit, "health_system")
+			if health_ext then
+				local post_health = health_ext:current_health()
+				if post_health > 0 then
+					mod._health_cache[attacked_unit] = post_health
+				end
+			end
+		end
+
 		local local_player = Managers.player:local_player(1)
 		if not local_player or local_player.player_unit ~= attacking_unit then return end
 
 		local s = mod.cached_settings
-		local hit_type = mod._classify_hit_type(attack_type, hit_weakspot, is_critical_strike)
+
+		local is_dot = (attack_type == "buff" or attack_type == "damage_over_time")
+		local is_explosion = (attack_type == "explosion")
+		local is_w = hit_weakspot
+		local is_c = is_critical_strike
+
+		local hit_type = "normal"
+		if is_dot then
+			hit_type = "dot"
+		elseif is_explosion then
+			hit_type = "explosion"
+		elseif is_w and is_c then
+			hit_type = "weakspot_crit"
+		elseif is_w then
+			hit_type = "pure_weakspot"
+		elseif is_c then
+			hit_type = "pure_crit"
+		end
 
 		local tracking_needed = (s.tracking_mode ~= "disabled")
-		local fct_needed = is_fct_eligible(hit_type, s.floating_mode)
+		local fct_needed = is_fct_eligible(hit_type, s)
+
 		if not tracking_needed and not fct_needed then return end
 
-		local unit_data_extension = ScriptUnit.has_extension(attacked_unit, "unit_data_system")
-		local breed_or_nil = unit_data_extension and unit_data_extension:breed()
-		if not (breed_or_nil and Breed.is_minion(breed_or_nil)) then return end
+		if not is_minion then return end
 
 		local unit_health_extension = ScriptUnit.has_extension(attacked_unit, "health_system")
 		if not unit_health_extension then return end
 
-		local state = _tracked_units[attacked_unit]
-		if not state then
-			local total = unit_health_extension:total_damage_taken()
-			local raw = unit_health_extension:damage_taken()
-			local max_hp = unit_health_extension:max_health()
-			local before = math.max(0, raw - damage)
-			local actual_this_hit = math.min(damage, math.max(0, max_hp - before))
-			state = {
-				prev_total_damage = math.max(0, total - actual_this_hit),
-				breed_or_nil = breed_or_nil,
-				metadata_queue = {},
-			}
-			_tracked_units[attacked_unit] = state
+		local max_hp = unit_health_extension:max_health()
+		local actual_damage
+
+		if attack_result == "died" then
+			local cached = mod._health_cache[attacked_unit]
+			actual_damage = (cached and cached > 0) and cached or max_hp
+		else
+			if breed_or_nil and breed_or_nil.clamp_health_percent_damage then
+				local health_damage_cap = max_hp * breed_or_nil.clamp_health_percent_damage
+				damage = math.min(damage, health_damage_cap)
+			end
+			actual_damage = damage
 		end
-		local entry = {
-			attack_type = attack_type,
-			hit_weakspot = hit_weakspot,
-			is_critical_strike = is_critical_strike,
-			reported_damage = damage,
-			hit_world_position = hit_world_position and Vector3Box(hit_world_position) or nil,
-			timestamp = os.clock(),
-		}
-		state.metadata_queue[#state.metadata_queue + 1] = entry
+
+		local final_damage = s.enable_overkill and damage or actual_damage
+		final_damage = math.ceil(final_damage)
+		if final_damage <= 0 then return end
+
+		-- [1] Static tracking events
+		if tracking_needed then
+			local mode = s.tracking_mode
+			if is_dot then
+				if mode == "combined" or mode == "separated" or mode == "dot_only" then
+					Managers.event:trigger("damage_tracker_on_damage", final_damage, "main_dot", final_damage)
+				end
+			else
+				if mode == "combined" or mode == "separated" or mode == "direct_only" then
+					Managers.event:trigger("damage_tracker_on_damage", final_damage, "main_direct", final_damage)
+				end
+			end
+		end
+
+		-- [2] FCT weapon filter
+		if fct_needed then
+			local wf = s.floating_weapon_filter
+			local pass_weapon = (wf == "both") or
+				(wf == "melee_only" and attack_type == "melee") or
+				(wf == "ranged_only" and attack_type == "ranged")
+			if not pass_weapon then return end
+
+			local threshold = s.fct_damage_threshold
+			if threshold > 0 and final_damage < threshold then return end
+
+			local breed_category = classify_breed_category(breed_or_nil)
+			local fct_world_pos = (attack_type ~= "explosion") and hit_world_position or nil
+			if not fct_world_pos and attacked_unit and Unit.has_node(attacked_unit, "j_spine") then
+				fct_world_pos = Unit.world_position(attacked_unit, Unit.node(attacked_unit, "j_spine"))
+			end
+			fct_world_pos = fct_world_pos or POSITION_LOOKUP[attacked_unit] or Unit.world_position(attacked_unit, 1)
+			Managers.event:trigger("damage_tracker_on_floating_damage", final_damage, hit_type, Vector3Box(fct_world_pos),
+				attacked_unit, breed_category)
+		end
 	end)
 
 mod.update = function(dt, t)
-	if not mod:is_enabled() then return end
-
-	local local_player = Managers.player:local_player_safe(1)
-	if not local_player then return end
-
-	local now = os.clock()
-	local s = mod.cached_settings
-	local tracking_needed = (s.tracking_mode ~= "disabled")
-
-	local units_to_drain = {}
-
-	for unit, state in pairs(_tracked_units) do
-		if not Unit.alive(unit) then
-			if #state.metadata_queue > 0 then
-				units_to_drain[#units_to_drain + 1] = { unit = unit, state = state }
-			else
-				_tracked_units[unit] = nil
-			end
-			goto continue_poll
-		end
-
-		if #state.metadata_queue == 0 then
-			goto continue_poll
-		end
-
-		mod._purge_stale_entries(state, now)
-
-		if #state.metadata_queue > 0 then
-			units_to_drain[#units_to_drain + 1] = { unit = unit, state = state }
-		end
-
-		::continue_poll::
-	end
-
-	for i = 1, #units_to_drain do
-		local info = units_to_drain[i]
-		local unit = info.unit
-		local state = info.state
-
-		local health_extension = ScriptUnit.has_extension(unit, "health_system")
-		if not health_extension then
-			_tracked_units[unit] = nil
-			goto next_unit
-		end
-
-		local current_total = health_extension:total_damage_taken()
-		local prev_total = state.prev_total_damage
-		local delta = current_total - prev_total
-
-		if delta <= 0 then
-			goto next_unit
-		end
-
-		local queue = state.metadata_queue
-		state.metadata_queue = {}
-		state.prev_total_damage = current_total
-
-		mod._process_drained_queue(unit, state.breed_or_nil, queue, delta, tracking_needed, s)
-
-		if not Unit.alive(unit) then
-			_tracked_units[unit] = nil
-		end
-
-		::next_unit::
-	end
-
-	mod._last_cleanup_time = mod._last_cleanup_time or 0
-	if now - mod._last_cleanup_time > 5 then
-		mod._last_cleanup_time = now
-		for unit, state in pairs(_tracked_units) do
-			if not Unit.alive(unit) and #state.metadata_queue == 0 then
-				_tracked_units[unit] = nil
+	local cache = mod._health_cache
+	for unit, _ in pairs(cache) do
+		if HEALTH_ALIVE[unit] then
+			local health_ext = ScriptUnit.has_extension(unit, "health_system")
+			if health_ext then
+				local health = health_ext:current_health()
+				if health > 0 then
+					cache[unit] = health
+				end
 			end
 		end
 	end

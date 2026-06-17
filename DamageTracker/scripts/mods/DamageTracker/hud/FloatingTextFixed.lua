@@ -29,42 +29,22 @@ local scenegraph_definition = {
 	screen = UIWorkspaceSettings.screen,
 }
 local base_style = {
-	line_spacing = 1.2,
-	drop_shadow = true,
-	font_type = "machine_medium",
-	size = sizeAnim,
-	text_horizontal_alignment = "center",
-	text_vertical_alignment = "center",
-	offset = { 0, 0, 10 },
+	line_spacing = 1.2, drop_shadow = true, font_type = "machine_medium", size = sizeAnim,
+	text_horizontal_alignment = "center", text_vertical_alignment = "center", offset = { 0, 0, 10 },
 }
 local widget_definitions = {}
 
 for i = 1, POOL_SIZE do
 	local s_name = "fct_container_" .. i
 	local w_name = "fct_widget_" .. i
-	scenegraph_definition[s_name] = {
-		parent = "screen",
-		vertical_alignment = "center",
-		horizontal_alignment = "center",
-		size = sizeAnim,
-		position = { 0, 0, 20 + i }
-	}
+	scenegraph_definition[s_name] = { parent = "screen", vertical_alignment = "center", horizontal_alignment = "center",
+		size = sizeAnim, position = { 0, 0, 20 + i } }
 
 	widget_definitions[w_name] = UIWidget.create_definition({
 		{ value = "", value_id = "text", style_id = "text", pass_type = "text", style = table.clone(base_style) },
-		{
-			value = "",
-			value_id = "icon",
-			style_id = "icon",
-			pass_type = "texture",
-			style = {
-				vertical_alignment = "center",
-				horizontal_alignment = "center",
-				color = { 0, 255, 255, 255 },
-				size = { 45, 45 },
-				offset = { 0, 0, 10 }
-			}
-		},
+		{ value = "", value_id = "icon", style_id = "icon", pass_type = "texture",
+			style = { vertical_alignment = "center", horizontal_alignment = "center",
+				color = { 0, 255, 255, 255 }, size = { 45, 45 }, offset = { 0, 0, 10 } } },
 	}, s_name)
 end
 
@@ -87,10 +67,7 @@ FloatingTextFixed.init = function(self, parent, draw_layer, start_scale)
 			timer = 0,
 			duration = 1.0,
 			widget_name = "fct_widget_" .. i,
-			x = 0,
-			y = 0,
-			dx = 0,
-			dy = 0,
+			x = 0, y = 0, dx = 0, dy = 0,
 			gravity = 0,
 			pop_strength = 0,
 			pop_duration = 0.2,
@@ -133,7 +110,12 @@ FloatingTextFixed._apply_widget_settings = function(self)
 	self._cached_ui_settings = self._cached_ui_settings or {}
 	local s = self._cached_ui_settings
 
-	s.floating_mode = mod:get("floating_mode") or "all_direct"
+	s.show_normal = mod:get("fct_show_normal")
+	s.show_pure_weakspot = mod:get("fct_show_pure_weakspot")
+	s.show_pure_crit = mod:get("fct_show_pure_crit")
+	s.show_weakspot_crit = mod:get("fct_show_weakspot_crit")
+	s.show_dot = mod:get("fct_show_dot")
+	s.show_explosion = mod:get("fct_show_explosion")
 	s.floating_style = mod:get("floating_style") or "compact"
 	s.fct_font_type = mod:get("fct_font_type") or "machine_medium"
 	s.show_horde = mod:get("fct_show_horde")
@@ -166,9 +148,12 @@ end
 
 FloatingTextFixed._check_filters = function(self, hit_type, breed_category)
 	local s = self._cached_ui_settings
-	if s.floating_mode == "disabled" then return false end
-	if s.floating_mode == "finesse_only" and (hit_type == "normal" or hit_type == "dot" or hit_type == "explosion") then return false end
-	if s.floating_mode == "all_direct" and hit_type == "dot" then return false end
+	if hit_type == "normal" and not s.show_normal then return false end
+	if hit_type == "pure_weakspot" and not s.show_pure_weakspot then return false end
+	if hit_type == "pure_crit" and not s.show_pure_crit then return false end
+	if hit_type == "weakspot_crit" and not s.show_weakspot_crit then return false end
+	if hit_type == "dot" and not s.show_dot then return false end
+	if hit_type == "explosion" and not s.show_explosion then return false end
 
 	local cat = breed_category or "other"
 	if cat == "horde" and s.show_horde == false then return false end
@@ -333,6 +318,7 @@ FloatingTextFixed._on_floating_damage = function(self, damage, hit_type, world_p
 
 	self:_apply_node_visuals(node)
 
+	-- Same-position fade cascade: all active nodes at the same screen position
 	for i = 1, POOL_SIZE do
 		local other = self.fct_pool[i]
 		if other ~= node and other.active then
